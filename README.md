@@ -10,7 +10,7 @@ TODO: Try to install Kilosort using a base python distribution
 
 Required before running for the first time:
 - npy-matlab (https://github.com/kwikteam/npy-matlab)
-- Kilosort4 v4.037: install Kilosort4 according to the developers' instructions (https://github.com/MouseLand/Kilosort/releases/tag/v4.0.37).
+- Kilosort4 v4.0.37: install Kilosort4 according to the developers' instructions (https://github.com/MouseLand/Kilosort/releases/tag/v4.0.37).
 - Reinstalling torch within the kilosort environment seems to be a requirement for this to work.
   
         pip uninstall torch
