@@ -230,14 +230,12 @@ function get_timestamps_and_wf_measurements(root_path, show_plots)
             cur_wf_mean = cur_wf_mean - mean(cur_wf_mean(1:5));
 
             %% Write spike times to txt file
-            fprintf('\tOutputting spike times to txt file\n')
             fileID = fopen(fullfile(cur_save_path, strcat(prename, '_cluster', int2str(cluster_phy_id), '.txt')), 'w');
             fprintf(fileID, '%.6f\n', (double(wf.allSpikeTimePoints{wf_idx}) / gwfparams.sr));
             fclose(fileID);
             
             %% Write spike waveforms to csv file
             % Delete old files first
-            fprintf('\tOutputting spike waveforms to csv file\n')
             writetable(array2table(cur_wfs), fullfile(cur_wfinfo_path, ...
                 strcat(prename, '_cluster', int2str(cluster_phy_id), '_waveforms.csv')));
             

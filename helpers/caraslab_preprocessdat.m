@@ -71,7 +71,7 @@ for i = 1:numel(datafolders)
 
     
 %     NT       = ops.NT ; % number of timepoints per batch
-    NT = floor(3*ops.fs);  % Can be significantly higher than kilosort's here, but lower it if running out of RAM
+    NT = floor(5*ops.fs);  % Can be significantly higher than kilosort's here, but lower it if running out of RAM
 
     bytes       = get_file_size(ops.fbinary); % size in bytes of raw binary
 
@@ -139,7 +139,11 @@ for i = 1:numel(datafolders)
             % Can't use GPU acceleration for comb filter yet...
             if getOr(ops, 'comb', 0)  % MML edit; comb filter
                 buff = buff';  % MML edit: transpose sooner
-                buff = filter(comb_b1, comb_a1, buff);
+                buff = filter(comb_b1, comb_a1, buff);  % causal forward filter
+                buff = flipud(buff); % reverse time
+                buff = filter(comb_b1, comb_a1, buff); % causal forward filter again
+                buff = flipud(buff); % reverse time back
+
                 dataRAW = gpuArray(buff); % move int16 data to GPU
             else
                 dataRAW = gpuArray(buff); % move int16 data to GPU
@@ -157,7 +161,6 @@ for i = 1:numel(datafolders)
 %             end
 
             datr = filter(b1, a1, dataRAW); % causal forward filter
-
             datr = flipud(datr); % reverse time
             datr = filter(b1, a1, datr); % causal forward filter again
             datr = flipud(datr); % reverse time back

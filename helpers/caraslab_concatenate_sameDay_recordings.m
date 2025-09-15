@@ -1,4 +1,4 @@
-function caraslab_concatenate_sameDay_recordings(root_path, chanMap, recording_type)
+function caraslab_concatenate_sameDay_recordings(root_path, chanMap, recording_type, info_only)
 %
 % This function searches the recording folders and concatenates *CLEAN.dat files
 % within folders that have the same date. A new file and directory will be
@@ -15,23 +15,15 @@ function caraslab_concatenate_sameDay_recordings(root_path, chanMap, recording_t
 % Written by M Macedo-Lima October, 2020
 % Last patch by M Macedo-Lima August, 2021
 
+if nargin < 4
+    info_only = 0;
+end
 
 %Prompt user to select folder
 datafolders_names = uigetfile_n_dir(root_path,'Select data directory');
 datafolders = {};
 for i=1:length(datafolders_names)
     [~, datafolders{end+1}, ~] = fileparts(datafolders_names{i});
-end
-
-% Remove SUBJ ID from folder names
-subj_in_filename = 0;
-for i = 1:length(datafolders)
-    if contains(datafolders{i}, 'SUBJ-ID')
-        subj_in_filename = 1;
-        df = split(datafolders{i}, '_');
-        id = df{1};
-        datafolders{i} = append(df{2},'_',df{3},'_',df{4});
-    end
 end
 
 % DEPRECATED: Sort according to dates and times in folder names
@@ -78,6 +70,18 @@ recording_date_time = [recording_date_time{:}];
 [recording_date_time, sort_idx] = sort(recording_date_time);
 datafolders = datafolders(sort_idx);
 
+% Remove SUBJ ID from folder names for concatenation folder
+subj_in_filename = 0;
+renamed_datafolders = datafolders;
+for i = 1:length(renamed_datafolders)
+    if contains(datafolders{i}, 'SUBJ-ID')
+        subj_in_filename = 1;
+        df = split(renamed_datafolders{i}, '_');
+        id = df{1};
+        renamed_datafolders{i} = append(df{2},'_',df{3},'_',df{4});
+    end
+end
+
 unique_days = unique(string(recording_date_time, 'yyMMdd'));
 for day_idx=1:length(unique_days)
     cur_day = unique_days(day_idx);
@@ -90,7 +94,8 @@ for day_idx=1:length(unique_days)
     % end
     % cur_day_datafolders = datafolders(~cellfun('isempty', cur_day_datafolders));
     cur_day_datafolders = datafolders(cur_day_finder);
-    
+    cur_day_renamed_datafolders = renamed_datafolders(cur_day_finder);
+
     %Skip if cur_day only has 1 recording
     if length(cur_day_datafolders) == 1
         continue
@@ -110,7 +115,11 @@ for day_idx=1:length(unique_days)
     full_output_dir = fullfile(root_path, output_dir);
     mkdir(full_output_dir);
     
-    fidC = fopen(fullfile(full_output_dir, strcat(output_file_name, "_CLEAN.dat")),  'w'); % Write concatenated recording
+    if ~info_only
+        fidC = fopen(fullfile(full_output_dir, strcat(output_file_name, "_CLEAN.dat")),  'w'); % Write concatenated recording
+    else
+        fidC = [];
+    end
     session_names = {};
     break_points = [];
 	break_points_seconds = [];
@@ -122,6 +131,7 @@ for day_idx=1:length(unique_days)
         cur_path_name = cur_day_datafolders{i};
         
         if subj_in_filename == 1
+            cur_path_name = cur_day_renamed_datafolders{i};
             cur_path_name = append(id, '_', cur_path_name);
             cur_sourcedir = fullfile(root_path, cur_path_name);
         else
@@ -167,13 +177,15 @@ for day_idx=1:length(unique_days)
         tranges = [tranges; ops.trange];
         cumulative_tranges = [cumulative_tranges; ops.trange + (previous_breakpoint / ops.fs)];
 %         
-        while ~feof(fid)  % read until end of file
-            buff = fread(fid, [NchanTOT NT], '*int16'); % read and reshape. Assumes int16 data (which should perhaps change to an option)
-            fwrite(fidC, buff(:), 'int16'); % write this batch to concatenated file
-        end
-        
-        fclose(fid); % close the file
+        if ~info_only
+            while ~feof(fid)  % read until end of file
+                buff = fread(fid, [NchanTOT NT], '*int16'); % read and reshape. Assumes int16 data (which should perhaps change to an option)
+                fwrite(fidC, buff(:), 'int16'); % write this batch to concatenated file
+            end
             
+            fclose(fid); % close the file
+        end
+
         % Make copies of the behavioral timestamps and metadata (if they exist) into the
         % Info files folder
         % In case this folder is still absent
@@ -185,6 +197,12 @@ for day_idx=1:length(unique_days)
             copyfile(fullfile(spout_filename.folder, spout_filename.name), fullfile(full_output_dir, 'Info files', spout_filename.name));
         end
         
+        % find opto file
+        opto_filename = dir(fullfile(cur_sourcedir, 'Info files', '*optoTimestamps.csv'));
+        if ~isempty(opto_filename)
+            copyfile(fullfile(opto_filename.folder, opto_filename.name), fullfile(full_output_dir, 'Info files', opto_filename.name));
+        end
+                
          % find trial info file
         trialInfo_filename = dir(fullfile(cur_sourcedir, 'Info files', '*trialInfo.csv'));
         if ~isempty(trialInfo_filename)
@@ -219,8 +237,10 @@ for day_idx=1:length(unique_days)
     writetable(ret_table, fullfile(full_output_dir, 'Info files', strcat(subj_id, '_', output_file_name, '_breakpoints.csv')));
     
     %% Close file and save Config
-    fclose(fidC);
-    
+    if ~info_only
+        fclose(fidC);
+    end
+
     % Create new config.mat
     caraslab_createconfig(root_path,chanMap, unique(badchannels), 0, recording_type, full_output_dir)
     load(fullfile(full_output_dir, 'config.mat'));

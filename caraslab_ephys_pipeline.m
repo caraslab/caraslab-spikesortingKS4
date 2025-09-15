@@ -32,29 +32,34 @@ clear; clc;
 %               'NNA4x16Lin64': Neuronexus A4x16 Poly2 Linear H64LP
 %               'NNA2x32':     Neuronexus A2x32-5mm-25-200-177
 
-% sel: whether you want to run all or a subset of the folders. If 1, you
-%   will be prompted to select folders. Multiple folders can be selected
-%   using Ctrl or Shift
+%       file_format:            'synapse':      TDT format
+%                               'oe':           OpenEphys format
+%                               'binary':       Binary format
+%                               'oe_info':      OpenEphys format (only info files)
+%                               'oe_binary':    Binary format (only info files)
 
 % rootH: path for temp Kilosort file. Should be a fast SSD
 
-
-Behaviordir = '/mnt/CL_8TB_3/Matheus/Ephys recordings/OFC-GtACR2_ACx-Electrode/matlab_data_files';
-
-input_dir = '/your_path/SUBJ-ID-X';
-output_dir =  '/your_path/SUBJ-ID-X'; 
+tank_id = 'SUBJ-ID-X';
 Probetype = 'NNA4x16Lin64';
-badchannels = [33, 35, 37, 55, 61, 64];
-recording_platform = 'synapse';
+badchannels = [];
+recording_platform = 'intan';
+file_format = 'oe'; 
 
-chanMapSavedir = '/your_path/SUBJ-ID-X/channelmaps';
-chanMap = fullfile(chanMapSavedir, [Probetype '_synapse.mat']); 
+
+Behaviordir = '/your_path/matlab_data_files';
+
+input_dir = ['/your_path/' tank_id];
+output_dir =  ['/your_path/' tank_id]; 
+
+chanMapSavedir = '/your_path/channelmaps';
+chanMap = [chanMapSavedir '/' Probetype '_'  recording_platform '.mat']; 
 
 % path to temporary binary file for Kilosort (same size as data, should be on fast SSD)
 rootH = '/your_path/'; 
 
 % Path to python3.9 within Kilosort virtual environment
-rootPython = '/your_path/miniconda3/envs/kilosort/bin/python';
+rootPython = '/your_path/';
 
 %% 1. MAKE A CHANNELMAP FILE
 % This function creates a channel map for a specific electrode probe array.
@@ -81,13 +86,13 @@ caraslab_createChannelMap(chanMapSavedir,Probetype, recording_platform);
 %
 %       (2) A -info file containing supporting information, including
 %               sampling rate, epocs, and timing
-%       format:     'synapse':      TDT format
+%  file_format:     'synapse':      TDT format
 %                   'oe':           OpenEphys format
 %                   'binary':       Binary format
 %                   'oe_info':      OpenEphys format (only info files)
 %                   'oe_binary':    Binary format (only info files)
-format = recording_platform;  % CANNOT BE INTAN; Be more specific
-caraslab_reformat_ephys_data(input_dir, output_dir, format, 1:64, 65);
+info_only = 0;
+caraslab_reformat_ephys_data(input_dir, output_dir, file_format, 1:64, 65, info_only);
 
 
 %% 3. Output timestamps info
@@ -100,19 +105,25 @@ caraslab_reformat_ephys_data(input_dir, output_dir, format, 1:64, 65);
 
 % IMPORTANT: if behavior is relevant, run this now so that createconfig can
 % extract information about how much of the beginning of the recording to 
-% skip due to noise from the TBSI headstage before being plugged in
+% skip due to noise
     
 % IMPORTANT 2: organize your behavior files into subfolders to be analyzed together , e.g.
 % shockTraining_pre, shockTraining_active, psychTesting_active, psychTesting_muscimol etc
 % select those folders when prompted (you can select multiple folders)
 
 % IMPORTANT 3: Make sure that the ephys for all behavioral sessions has
-% already been extracted before you run this. This code will attempt to
+% already been extracted before you run this.
+% This code will attempt to
 % match them by date and session time and unpredictable errors may occur if
 % the target ephys folder is not present
 split_by_opto = 0; % Not implemented for ephys recordings yet.
 experiment_type = recording_platform;
+% Behavioral pipeline doesn't care if oe or binary
+if ~strcmp(experiment_type, 'synapse')
+    experiment_type = 'intan';
+end
 caraslab_behav_pipeline(output_dir, Behaviordir, 'experiment_type', experiment_type);
+
 
 
 %% 4. CREATE KILOSORT CONFIGURATION FILE
@@ -120,18 +131,20 @@ caraslab_behav_pipeline(output_dir, Behaviordir, 'experiment_type', experiment_t
 %   establishes the binary path for each future binary dataset.
 
 %   IMPORTANT: this function is a  'living' function, i.e. you should edit it
-%   appropriately for every experiment if necessary
+%   appropriately for every subject if necessary
 % e.g. whether to CAR/comb filter; template size and more...
-caraslab_createconfig(output_dir,chanMap, badchannels, 1, recording_platform);
+fetch_tstart_from_behav = 1;
+caraslab_createconfig(output_dir,chanMap, badchannels, fetch_tstart_from_behav, recording_platform)
 
 
 %% 5. CREATE *DAT BINARY FILE
+
+% !!! NOT REQUIRED FOR INTAN FILES !!!
+
 % This function detects bad channels by RMS thresholds and saves them in ops.igood
-%   Bad channels detected this way are currently not used for anything, but it
-%   could be helpful to signal unknown bad channels
 % Then, this function rescales and converts -mat files to 16 bit integer -dat files
 delete_matfile = 1;  % deletes raw .mat file on exit
-caraslab_mat2datChunked(output_dir, delete_matfile);
+caraslab_mat2datChunked(output_dir, delete_matfile)
 
 
 %% 6. REMOVE ARTIFACTS AND FILTER
@@ -153,7 +166,8 @@ caraslab_preprocessdat(output_dir, inspect_artifact_removal_only)
 % some useful parameters about the concatenation; plus it outputs a csv
 % file with the continuous breakpoints where one file ends and another
 % starts
-caraslab_concatenate_sameDay_recordings(output_dir, chanMap, recording_platform)
+info_only = 0;
+caraslab_concatenate_sameDay_recordings(output_dir, chanMap, recording_platform, info_only)
 
 %%
 % caraslab_concatenate_sameDay_configs(Savedir, chanMap, 'synapse')
@@ -198,7 +212,7 @@ get_timestamps_and_wf_measurements(output_dir, show_plots)
 % spike means and SEM organized in space in a pdf. If filter_300hz==0, it will
 % search for the 300hz bandpass filtered file. Otherwise, it will filter
 % again. It defaults to extracting only single units, but can be tweaked
-show_plots = 1;
+show_plots = 0;
 load_previous_gwfparams = 1;
 plot_mean = 1;
 plot_wf_samples = 0;

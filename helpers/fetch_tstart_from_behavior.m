@@ -26,7 +26,7 @@ try
                 'Processing a concatenated file folder...');
             throw(ME)
         end
-        behav_table = readtable(fullfile(behav_file.folder, behav_file.name));
+        behav_table = readtable(fullfile(behav_file.folder, behav_file.name), 'Delimiter', ',');
 
         tstart = behav_table.Trial_onset(1);
 

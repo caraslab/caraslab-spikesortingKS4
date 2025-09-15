@@ -124,14 +124,13 @@ for i = 1:numel(datafolders)
     
     %% %%%%% Edit these if necessary %%%%% %%
     %% Preprocessing parameters
-    if ~isfield(ops, 'trange')
-        if ~fetch_tstart_from_behav
-            ops.trange = [0 Inf]; % time range to sort
-        else
-            tstart = fetch_tstart_from_behavior(fullfile(cur_savedir, 'Info files'));
-            ops.trange = [tstart Inf];
-        end
+    if ~fetch_tstart_from_behav
+        ops.trange = [0 Inf]; % time range to sort
+    else
+        tstart = fetch_tstart_from_behavior(fullfile(cur_savedir, 'Info files'));
+        ops.trange = [tstart Inf];
     end
+
     
     % Kilosort 4 filters are good enough. No need to pre-filter
     ops.highpass = 1;  % filter BEFORE kilosort (1)
@@ -141,9 +140,9 @@ for i = 1:numel(datafolders)
      
     ops.deline = 0;  % Fails too often; use comb for now (0)
     
-    ops.comb = 1;  % Comb filter before highpass (1)
+    ops.comb = 1;  % Comb filter before highpass (0)
 
-    ops.ntbuff = round((0.002 * ops.fs));
+    ops.ntbuff = floor(0.002 * ops.fs);
     
     ops.rm_artifacts = 1;  % Remove super high amplitude events
     ops.std_threshold = 65;  % Threshold for artifact rejection (65)
@@ -220,7 +219,7 @@ for i = 1:numel(datafolders)
     % EXTRA PARAMETERS
     % Number of samples per waveform. Also size of symmetric padding for filtering.
     % 2 ms + 1 bin
-    ops.ksparams.nt = int16(ops.ntbuff);
+    ops.ksparams.nt = int16(ops.ntbuff + 1);
     
     % Scalar shift to apply to data before all other operations. In most cases this should be left as NaN.
     ops.ksparams.shift = NaN;
